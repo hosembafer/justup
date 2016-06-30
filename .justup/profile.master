@@ -1,5 +1,5 @@
 protocol = ftp
 host = localhost
-user = rafael
+user = user
 pass = root123
-basedir = /home/rafael/Public
+basedir = /var/www/site/Public
