@@ -1,5 +1,0 @@
-protocol = ftp
-host = localhost
-user = user
-pass = root123
-basedir = /var/www/site/Public
