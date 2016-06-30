@@ -1,0 +1,5 @@
+protocol = ftp
+host = localhost
+user = rafael
+pass = root123
+basedir = /home/rafael/Public
