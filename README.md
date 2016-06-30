@@ -1,7 +1,7 @@
 # justup
 Justup is a deployment tool written in C.
 
-Current status: *DEVELOPMENT*
+Current status: **DEVELOPMENT**
 
 No testing. No examples.
 Only clean hardcore code.
