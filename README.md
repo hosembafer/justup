@@ -10,6 +10,6 @@ Only clean hardcore code.
 But it will be soon.
 
 
-> This project is created for simple sites, that usually don't use servers with SFTP, WebDAV or something like that, when there isn't any opportunity except use FTP.
+> This project is created for simple sites, that usually don't use servers with SFTP, WebDAV or something like that, when there isn't any other way except use FTP.
 
-Thanks for small and helpful library [inih](https://github.com/benhoyt/inih) that I use for parse configuration files.
+Thanks for small and helpful library [inih](https://github.com/benhoyt/inih) which I use to parse configuration files.
