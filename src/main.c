@@ -55,7 +55,6 @@ char profile_host[80];
 char profile_user[40];
 char profile_pass[80];
 char profile_basedir[80];
-int profile_parsize = 0;
 
 const char fp_cvsignore[] = ".cvsignore";
 int fp_cvsignore_size;
@@ -106,11 +105,6 @@ static int inih_handler(void* user, const char* section, const char* name, const
 	else if(!strcmp(name, "basedir"))
 	{
 		strcpy(profile_basedir, value);
-	}
-	
-	if(strlen(value) > 0)
-	{
-		profile_parsize++;
 	}
 	
 	return 1;
@@ -384,8 +378,7 @@ void print_resources()
 		FtpInit();
 		if(!FtpConnect(profile_host, &ftp_conn) || !FtpLogin(profile_user, profile_pass, ftp_conn))
 		{
-			printf("FTP Client can't establishe connection or after connecting can't authorize FTP Server");
-			printf("Something went wrong...\n");
+			printf("FTP Client can't establishe connection or after connecting can't authorize FTP Server\n");
 			exit(EXIT_FAILURE);
 		}
 		
@@ -585,18 +578,20 @@ void proceed_profile(char *new_profile)
 	char profile_path[profile_path_size];
 	sprintf(profile_path, ".justup/profile.%s", new_profile);
 	
-	const char *profileExample = "protocol = ftp\n"
-	"host = localhost\n"
-	"user = user\n"
-	"pass = root123\n"
-	"basedir = /var/www/site/";
-	FILE *cufp = fopen(profile_path, "r+");
-	fprintf(cufp, "%s", profileExample);
-	fclose(cufp);
-	
-	if(!fs_entity_exists(profile_path) || !fsize(profile_path) || profile_parsize < 5)
+	if(!fs_entity_exists(profile_path) || !fsize(profile_path))
 	{
 		printf("You need to create and set up <%s> file like profile.master\n", profile_path);
+		
+		const char *profileExample = "protocol = ftp\n"
+		"host = localhost\n"
+		"user = user\n"
+		"pass = root123\n"
+		"basedir = /var/www/site/";
+		printf("%s\n", profileExample);
+		FILE *cufp = fopen(profile_path, "w+");
+		fprintf(cufp, "%s", profileExample);
+		fclose(cufp);
+		
 		exit(EXIT_FAILURE);
 	}
 }
@@ -671,14 +666,13 @@ void init(int argc, char **argv)
 	sprintf(profile_path, ".justup/profile.%s", profile);
 	
 	
+	proceed_profile(profile); // We need to check profile config file whether it filled correctly.
+	
 	if(ini_parse(profile_path, inih_handler, NULL) < 0)
 	{
 		printf("Can't load <%s>\n", profile_path);
 		exit(EXIT_FAILURE);
 	}
-	
-	
-	proceed_profile(profile); // We need to check profile config file whether it filled correctly.
 	
 	
 	int dbPathSize = 22 + strlen(profile);
