@@ -321,6 +321,11 @@ void proceed()
 				exit(EXIT_FAILURE);
 			}
 		}
+		else if(COMMAND_SAVE)
+		{
+			save_resource(resources[i].path, resources[i].file_time_stamp);
+			printf("%s|SAVED \t %s\n", resources[i].status, resources[i].path);
+		}
 		else if(COMMAND_STATUS)
 		{
 			printf("%s \t %s\n", resources[i].status, resources[i].path);
@@ -580,23 +585,6 @@ void init(int argc, char **argv)
 	else if(argc >= 2 && !strcmp(argv[1], "push"))
 	{
 		COMMAND_PUSH = 1;
-		
-		if(argc >= 3)
-		{
-			int ai;
-			for(ai = 2; ai < argc; ai++)
-			{
-				if(fs_entity_exists(argv[ai]) || get_resource_ts(argv[ai]) != -1)
-				{
-					ONLY_COMMAND = 0;
-				}
-				else
-				{
-					printf("Resource <%s> not found.\n", argv[ai]);
-					exit(EXIT_FAILURE);
-				}
-			}
-		}
 	}
 	else if(argc >= 3 && !strcmp(argv[1], "profile"))
 	{
@@ -605,6 +593,23 @@ void init(int argc, char **argv)
 	else if(argc >= 2 && !strcmp(argv[1], "save"))
 	{
 		COMMAND_SAVE = 1;
+	}
+	
+	if(argc >= 3 && (COMMAND_SAVE || COMMAND_PUSH))
+	{
+		int ai = 2;
+		for(; ai < argc; ai++)
+		{
+			if(fs_entity_exists(argv[ai]) || get_resource_ts(argv[ai]) != -1)
+			{
+				ONLY_COMMAND = 0;
+			}
+			else
+			{
+				printf("Resource <%s> not found.\n", argv[ai]);
+				exit(EXIT_FAILURE);
+			}
+		}
 	}
 	
 	
