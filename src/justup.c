@@ -462,8 +462,7 @@ void proceed_profile(char *new_profile)
 	}
 	
 	
-	int profile_path_size = 17 + strlen(new_profile);
-	char profile_path[profile_path_size];
+	char profile_path[117] = { 0 };
 	sprintf(profile_path, ".justup/profile.%s", new_profile);
 	
 	if(!fs_entity_exists(profile_path) || !fsize(profile_path))
@@ -541,16 +540,15 @@ void init(int argc, char **argv)
 	}
 	
 	int profile_csize = fsize(".justup/profile.current");
-	profile = (char *)malloc(sizeof(char) * profile_csize);
-	memset(profile, 0, profile_csize + 1);
+	/*profile = (char *)malloc(sizeof(char) * profile_csize);
+	memset(profile, 0, profile_csize);*/
 	
 	int ipfp = open(".justup/profile.current", O_RDONLY, 0777);
-	read(ipfp, profile, profile_csize + 1);
+	read(ipfp, profile, profile_csize);
 	close(ipfp);
 	
 	
-	int profile_path_size = 17 + 100;
-	char profile_path[profile_path_size];
+	char profile_path[117] = { 0 };
 	sprintf(profile_path, ".justup/profile.%s", profile);
 	
 	
@@ -639,7 +637,6 @@ void deinit()
 	sqlite3_close(db);
 	free(ignore_list);
 	free(resources);
-	free(profile);
 	
 	lock(2);
 }

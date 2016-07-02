@@ -28,7 +28,7 @@ int fp_cvsignore_size;
 
 
 // We reading from profile.<profile> file all configurations and put there
-char *profile;
+char profile[20];
 char profile_protocol[7];
 char profile_host[80];
 char profile_user[40];
