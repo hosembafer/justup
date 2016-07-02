@@ -5,7 +5,7 @@ CPARAMS = -o
 NAME = justup
 
 CFLAGS = `pkg-config --cflags --libs sqlite3` -lftp
-SOURCES = src/main.c
+SOURCES = src/justup.c
 EXECUTABLE = $(NAME)
 
 all: $(NAME)

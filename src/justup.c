@@ -22,57 +22,10 @@
 
 #include <sqlite3.h>
 
+#include "vars.h"
+#include "justup.h"
+
 #define PATH_MAX 4096
-
-
-
-int fnmatch_multi(char *patterns /* Separated by new lines(\n) */, const char *string, int flags);
-int callback(void *NotUsed, int argc, char **argv, char **azColName);
-void prepare_resource(char * path);
-
-int COMMAND_STATUS = 0;
-int COMMAND_PUSH = 0;
-int COMMAND_PROFILE = 0;
-int COMMAND_SAVE = 0;
-int ONLY_COMMAND = 1;
-
-
-netbuf *ftp_conn = NULL;
-
-
-sqlite3 *db;
-char *zErrMsg = 0;
-int  rc;
-char *sql;
-sqlite3_stmt *res;
-
-char *ignore_list;
-char *static_ignore_list = "\n.justup/*\n.justup";
-
-char *profile;
-char profile_protocol[7];
-char profile_host[80];
-char profile_user[40];
-char profile_pass[80];
-char profile_basedir[80];
-
-const char fp_cvsignore[] = ".cvsignore";
-int fp_cvsignore_size;
-
-typedef struct TYPE_RESOURCE {
-	char path[PATH_MAX];
-	int file_time_stamp;
-	int db_time_stamp;
-	char status[1];
-} TYPE_RESOURCE;
-
-
-struct TYPE_RESOURCE *resources;
-unsigned int resources_size = 0;
-
-unsigned int entity_count = 0;
-const unsigned int timeStampSize = 10;
-
 
 
 void usage()
@@ -226,11 +179,8 @@ static void list_dir(const char * dir_name, int allow_type, list_dir_cb list_dir
 			list_dir_callback(outputPath);
 		}
 		
-		entity_count++;
-		
 		if(entry->d_type & DT_DIR) // Check that the directory is not "d" or d's parent.
 		{
-			
 			if(strcmp (d_name, "..") != 0 && strcmp (d_name, ".") != 0)
 			{
 				int path_length;
@@ -261,9 +211,7 @@ off_t fsize(const char *filename)
 	struct stat st; 
 	
 	if(stat(filename, &st) == 0)
-	{
 		return st.st_size;
-	}
 	
 	return -1; 
 }
@@ -342,19 +290,18 @@ int send_resource(TYPE_RESOURCE resource)
 
 int is_resource_exists(char path[])
 {
-	int exists = 0;
+	int i = 0;
 	
-	int i;
-	for(i = 0; i < resources_size; i++)
+	for(; i < resources_size; i++)
 	{
 		if(!strcmp(resources[i].path, path))
 		{
-			exists = 1;
+			return 1;
 			break;
 		}
 	}
 	
-	return exists;
+	return 0;
 }
 
 void push_resource(char path[], int db_time_stamp, int file_time_stamp, char status[])
@@ -597,6 +544,75 @@ void proceed_profile(char *new_profile)
 }
 
 /*
+ * prepare_resource() is a callback function, that works when
+ * our list_dir() or list_db() functions iterating/reading new resource.
+ */
+void prepare_resource(char * path)
+{ 
+	int file_time_stamp = file_modify_date(path);
+	int db_time_stamp = get_resource_ts(path);
+	
+	char entity_status[2];
+	
+	// printf("%s-%i-%i\n", path, file_time_stamp, db_time_stamp);
+	if(file_time_stamp == -1 || db_time_stamp == -1)
+	{
+		if(file_time_stamp > db_time_stamp)
+		{
+			strcpy(entity_status, "A");
+		}
+		else
+		{
+			strcpy(entity_status, "R");
+		}
+	}
+	else
+	{
+		strcpy(entity_status, "M");
+	}
+	
+	
+	if(file_time_stamp > db_time_stamp)
+	{
+		if(COMMAND_STATUS)
+		{
+			push_resource(path, db_time_stamp, file_time_stamp, entity_status);
+		}
+		else if(COMMAND_PUSH)
+		{
+			push_resource(path, db_time_stamp, file_time_stamp, entity_status);
+			set_resource_ts(path, file_time_stamp);
+		}
+		else if(COMMAND_SAVE)
+		{
+			set_resource_ts(path, file_time_stamp);
+		}
+	}
+	else if(file_time_stamp < db_time_stamp)
+	{
+		if(COMMAND_STATUS)
+		{
+			push_resource(path, db_time_stamp, file_time_stamp, entity_status);
+		}
+		else if(COMMAND_PUSH)
+		{
+			push_resource(path, db_time_stamp, file_time_stamp, entity_status);
+			set_resource_ts(path, -1);
+		}
+		else if(COMMAND_SAVE)
+		{
+			set_resource_ts(path, -1);
+		}
+	}
+}
+
+int fs_entity_exists(const char *filename)
+{
+	struct stat buffer;
+	return (stat (filename, &buffer) == 0);
+}
+
+/*
  * If you know, what I mean.
  */
 void init(int argc, char **argv)
@@ -719,75 +735,6 @@ void deinit()
 	free(profile);
 	
 	lock(2);
-}
-
-/*
- * prepare_resource() is a callback function, that works when
- * our list_dir() or list_db() functions iterating/reading new resource.
- */
-void prepare_resource(char * path)
-{ 
-	int file_time_stamp = file_modify_date(path);
-	int db_time_stamp = get_resource_ts(path);
-	
-	char entity_status[2];
-	
-	// printf("%s-%i-%i\n", path, file_time_stamp, db_time_stamp);
-	if(file_time_stamp == -1 || db_time_stamp == -1)
-	{
-		if(file_time_stamp > db_time_stamp)
-		{
-			strcpy(entity_status, "A");
-		}
-		else
-		{
-			strcpy(entity_status, "R");
-		}
-	}
-	else
-	{
-		strcpy(entity_status, "M");
-	}
-	
-	
-	if(file_time_stamp > db_time_stamp)
-	{
-		if(COMMAND_STATUS)
-		{
-			push_resource(path, db_time_stamp, file_time_stamp, entity_status);
-		}
-		else if(COMMAND_PUSH)
-		{
-			push_resource(path, db_time_stamp, file_time_stamp, entity_status);
-			set_resource_ts(path, file_time_stamp);
-		}
-		else if(COMMAND_SAVE)
-		{
-			set_resource_ts(path, file_time_stamp);
-		}
-	}
-	else if(file_time_stamp < db_time_stamp)
-	{
-		if(COMMAND_STATUS)
-		{
-			push_resource(path, db_time_stamp, file_time_stamp, entity_status);
-		}
-		else if(COMMAND_PUSH)
-		{
-			push_resource(path, db_time_stamp, file_time_stamp, entity_status);
-			set_resource_ts(path, -1);
-		}
-		else if(COMMAND_SAVE)
-		{
-			set_resource_ts(path, -1);
-		}
-	}
-}
-
-int fs_entity_exists(char *filename)
-{
-	struct stat buffer;
-	return (stat (filename, &buffer) == 0);
 }
 
 int main(int argc, char **argv)
