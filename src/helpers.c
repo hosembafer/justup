@@ -83,3 +83,25 @@ int lock(int act)
 		unlink(lockfile);
 	}
 }
+
+
+int answer_yn(char *question)
+{
+	char answer[2]; // 110=n | 121=y
+	
+	printf("%s y/n: ", question);
+	fgets(answer, 2, stdin);
+	
+	if((int) answer[0] == 110)
+	{
+		return 0;
+	}
+	else if((int) answer[0] == 121)
+	{
+		return 1;
+	}
+	else
+	{
+		return 1;
+	}
+}

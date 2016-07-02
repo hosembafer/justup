@@ -210,17 +210,22 @@ int send_resource(TYPE_RESOURCE resource)
 		if(!path_to_commands(resource.path))
 		{
 			printf("FTP unable to create a folder in remote server\n");
-			exit(EXIT_FAILURE);
 		}
 		if(!FtpPut(resource.path, basename(path_tok), FTPLIB_IMAGE, ftp_conn))
 		{
 			printf("FTP unable to modify file in remote server\n");
-			exit(EXIT_FAILURE);
+			if(!answer_yn("Shik this operation ?"))
+			{
+				exit(EXIT_FAILURE);
+			}
 		}
 		if(!FtpChdir(profile_basedir, ftp_conn))
 		{
 			printf("FTP is unable to find base directory or unable to change directory in remote server\n");
-			exit(EXIT_FAILURE);
+			if(!answer_yn("Shik this operation ?"))
+			{
+				exit(EXIT_FAILURE);
+			}
 		}
 		
 		return 1;
@@ -230,12 +235,18 @@ int send_resource(TYPE_RESOURCE resource)
 		if(!FtpChdir(profile_basedir, ftp_conn))
 		{
 			printf("FTP is unable to find base directory or unable to change directory in remote server\n");
-			exit(EXIT_FAILURE);
+			if(!answer_yn("Shik this operation ?"))
+			{
+				exit(EXIT_FAILURE);
+			}
 		}
 		if(!FtpDelete(path_tok, ftp_conn))
 		{
-			printf("FTP unable to delete a file in remote server\n");
-			exit(EXIT_FAILURE);
+			printf("FTP unable to delete a file <%s> in remote server\n", resource.path);
+			if(!answer_yn("Shik this operation ?"))
+			{
+				exit(EXIT_FAILURE);
+			}
 		}
 		
 		return 1;
@@ -279,7 +290,7 @@ int push_resource(char path[], int db_time_stamp, int file_time_stamp, char stat
 }
 
 
-void print_resources()
+void proceed()
 {
 	if(COMMAND_PUSH)
 	{
@@ -298,8 +309,10 @@ void print_resources()
 	{
 		if(COMMAND_PUSH)
 		{
+			//printf("%s-%i-%i-%s\n", resources[i].path, resources[i].file_time_stamp, resources[i].db_time_stamp, resources[i].status);
 			if(send_resource(resources[i]))
 			{
+				save_resource(resources[i].path, resources[i].file_time_stamp);
 				printf("%s|OK \t %s\n", resources[i].status, resources[i].path);
 			}
 			else
@@ -308,7 +321,7 @@ void print_resources()
 				exit(EXIT_FAILURE);
 			}
 		}
-		else
+		else if(COMMAND_STATUS)
 		{
 			printf("%s \t %s\n", resources[i].status, resources[i].path);
 		}
@@ -470,7 +483,7 @@ void proceed_profile(char *new_profile)
  * prepare_resource() is a callback function, that works when
  * our list_dir() or list_db() functions iterating/reading new resource.
  */
-void prepare_resource(char * path)
+void prepare_resource(char *path)
 { 
 	int file_time_stamp = file_modify_date(path);
 	int db_time_stamp = get_resource_ts(path);
@@ -494,38 +507,9 @@ void prepare_resource(char * path)
 		strcpy(entity_status, "M");
 	}
 	
-	
-	if(file_time_stamp > db_time_stamp)
+	if(file_time_stamp != db_time_stamp)
 	{
-		if(COMMAND_STATUS)
-		{
-			push_resource(path, db_time_stamp, file_time_stamp, entity_status);
-		}
-		else if(COMMAND_PUSH)
-		{
-			push_resource(path, db_time_stamp, file_time_stamp, entity_status);
-			save_resource(path, file_time_stamp);
-		}
-		else if(COMMAND_SAVE)
-		{
-			save_resource(path, file_time_stamp);
-		}
-	}
-	else if(file_time_stamp < db_time_stamp)
-	{
-		if(COMMAND_STATUS)
-		{
-			push_resource(path, db_time_stamp, file_time_stamp, entity_status);
-		}
-		else if(COMMAND_PUSH)
-		{
-			push_resource(path, db_time_stamp, file_time_stamp, entity_status);
-			save_resource(path, -1);
-		}
-		else if(COMMAND_SAVE)
-		{
-			save_resource(path, -1);
-		}
+		push_resource(path, db_time_stamp, file_time_stamp, entity_status);
 	}
 }
 
@@ -541,40 +525,6 @@ void init(int argc, char **argv)
 	}
 	
 	lock(1);
-	
-	if(argc >= 2 && !strcmp(argv[1], "status"))
-	{
-		COMMAND_STATUS = 1;
-	}
-	else if(argc >= 2 && !strcmp(argv[1], "push"))
-	{
-		COMMAND_PUSH = 1;
-		
-		if(argc >= 3)
-		{
-			int ai;
-			for(ai = 2; ai < argc; ai++)
-			{
-				if(fs_entity_exists(argv[ai]))
-				{
-					ONLY_COMMAND = 0;
-				}
-				else
-				{
-					printf("Resource <%s> not found.\n", argv[ai]);
-					exit(EXIT_FAILURE);
-				}
-			}
-		}
-	}
-	else if(argc >= 3 && !strcmp(argv[1], "profile"))
-	{
-		COMMAND_PROFILE = 1;
-	}
-	else if(argc >= 2 && !strcmp(argv[1], "save"))
-	{
-		COMMAND_SAVE = 1;
-	}
 	
 	mkdir(".justup", 0777);
 	
@@ -621,6 +571,41 @@ void init(int argc, char **argv)
 	char *err_msg = 0;
 	char *sql = "CREATE TABLE test(test_id INTEGER PRIMARY KEY, test_path TEXT UNIQUE, test_timestamp INT);";
 	sqlite3_exec(db, sql, 0, 0, &err_msg);
+	
+	
+	if(argc >= 2 && !strcmp(argv[1], "status"))
+	{
+		COMMAND_STATUS = 1;
+	}
+	else if(argc >= 2 && !strcmp(argv[1], "push"))
+	{
+		COMMAND_PUSH = 1;
+		
+		if(argc >= 3)
+		{
+			int ai;
+			for(ai = 2; ai < argc; ai++)
+			{
+				if(fs_entity_exists(argv[ai]) || get_resource_ts(argv[ai]) != -1)
+				{
+					ONLY_COMMAND = 0;
+				}
+				else
+				{
+					printf("Resource <%s> not found.\n", argv[ai]);
+					exit(EXIT_FAILURE);
+				}
+			}
+		}
+	}
+	else if(argc >= 3 && !strcmp(argv[1], "profile"))
+	{
+		COMMAND_PROFILE = 1;
+	}
+	else if(argc >= 2 && !strcmp(argv[1], "save"))
+	{
+		COMMAND_SAVE = 1;
+	}
 	
 	
 	
@@ -674,14 +659,14 @@ int main(int argc, char **argv)
 			int ai;
 			for(ai = 2; ai < argc; ai++)
 			{
-				if(fs_entity_exists(argv[ai]))
+				if(fs_entity_exists(argv[ai]) || get_resource_ts(argv[ai]) != -1)
 				{
 					prepare_resource(argv[ai]);
 				}
 			}
 		}
 		
-		print_resources();
+		proceed();
 	}
 	else
 	{

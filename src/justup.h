@@ -16,7 +16,7 @@ int is_resource_exists(char path[]);
 
 int push_resource(char path[], int db_time_stamp, int file_time_stamp, char status[]);
 
-void print_resources();
+void proceed();
 
 void save_resource(char *path, int time_stamp);
 
