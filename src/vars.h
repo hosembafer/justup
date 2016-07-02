@@ -1,3 +1,5 @@
+#define PATH_MAX 4096
+
 int COMMAND_STATUS = 0;
 int COMMAND_PUSH = 0;
 int COMMAND_PROFILE = 0;

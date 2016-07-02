@@ -23,19 +23,8 @@
 #include <sqlite3.h>
 
 #include "vars.h"
+#include "helpers.c"
 #include "justup.h"
-
-#define PATH_MAX 4096
-
-
-void usage()
-{
-	printf("Usage: \n"
-	"   justup status\n"
-	"   justup save\n"
-	"   justup push\n"
-	"   justup push <path1 path2 ...>\n");
-}
 
 static int inih_handler(void* user, const char* section, const char* name, const char* value)
 {
@@ -63,29 +52,6 @@ static int inih_handler(void* user, const char* section, const char* name, const
 	return 1;
 }
 
-int file_modify_date(char *path)
-{
-	struct stat attr;
-	char time_stamp[timeStampSize];
-	
-	if(stat(path, &attr) != -1)
-	{
-		char buffer[timeStampSize];
-		
-		struct tm *tm;
-		tm = localtime(&attr.st_ctime);
-		
-		strftime(buffer, timeStampSize + 1, "%s", tm);
-		
-		strcpy(time_stamp, buffer);
-		int resTs = atoi(time_stamp);
-		
-		return resTs;
-	}
-	
-	return -1;
-}
-
 typedef void (*list_dir_cb)(char * path);
 
 static void list_db()
@@ -93,7 +59,7 @@ static void list_db()
 	char *err_msg = 0;
 	char *sql = "SELECT * FROM test ORDER BY test_path DESC";
 	
-	rc = sqlite3_exec(db, sql, callback, 0, &err_msg);
+	rc = sqlite3_exec(db, sql, inih_callback, 0, &err_msg);
 	
 	if(rc != SQLITE_OK)
 	{
@@ -104,7 +70,7 @@ static void list_db()
 	}
 }
 
-int callback(void *NotUsed, int argc, char **argv, char **azColName)
+int inih_callback(void *NotUsed, int argc, char **argv, char **azColName)
 {
 	NotUsed = 0;
 	
@@ -206,16 +172,6 @@ static void list_dir(const char * dir_name, int allow_type, list_dir_cb list_dir
 	}
 }
 
-off_t fsize(const char *filename)
-{
-	struct stat st; 
-	
-	if(stat(filename, &st) == 0)
-		return st.st_size;
-	
-	return -1; 
-}
-
 int path_to_commands(char path[])
 {
 	int total_size = 0;
@@ -304,7 +260,7 @@ int is_resource_exists(char path[])
 	return 0;
 }
 
-void push_resource(char path[], int db_time_stamp, int file_time_stamp, char status[])
+int push_resource(char path[], int db_time_stamp, int file_time_stamp, char status[])
 {
 	if(!is_resource_exists(path))
 	{
@@ -315,8 +271,13 @@ void push_resource(char path[], int db_time_stamp, int file_time_stamp, char sta
 		resources[resources_size - 1].db_time_stamp = db_time_stamp;
 		resources[resources_size - 1].file_time_stamp = file_time_stamp;
 		strcpy(resources[resources_size - 1].status, status);
+		
+		return resources_size - 1;
 	}
+	
+	return -1;
 }
+
 
 void print_resources()
 {
@@ -359,7 +320,7 @@ void print_resources()
 	}
 }
 
-void set_resource_ts(char *path, int time_stamp)
+void save_resource(char *path, int time_stamp)
 {
 	char *err_msg = 0;
 	if(time_stamp == -1)
@@ -471,44 +432,6 @@ int get_resource_ts(char *path)
 	return savedTimeStamp;
 }
 
-int fnmatch_multi(char *patterns /* Separated by new lines(\n) */, const char *string, int flags)
-{
-	char *ignorable, patterns_tok[strlen(patterns)];
-	strcpy(patterns_tok, patterns);
-	
-	ignorable = strtok(patterns_tok, "\n");
-	while(ignorable != NULL)
-	{
-		int fnr = fnmatch(ignorable, string, flags);
-		if(fnr == 0 && /* this is a hack for only my uses, if you want to use as fnmatch_multi, you have to delete the next (ignorable) first symbol check */ ignorable[0] != '#')
-		{
-			return 0;
-		}
-		
-		ignorable = strtok(NULL, "\n");
-	}
-	
-	return 1;
-}
-
-int lock(int act)
-{
-	const char *lockfile = ".justup/.lock";
-	if(act == 0) // Check if locked
-	{
-		return fs_entity_exists(lockfile);
-	}
-	else if(act == 1) // Create lock file
-	{
-		int fp = open(lockfile, O_RDONLY, 0777);
-		close(fp);
-	}
-	else if(act == 2) // Remove lock file
-	{
-		unlink(lockfile);
-	}
-}
-
 void proceed_profile(char *new_profile)
 {
 	FILE *fp = fopen(".justup/profile.current", "w+");
@@ -581,11 +504,11 @@ void prepare_resource(char * path)
 		else if(COMMAND_PUSH)
 		{
 			push_resource(path, db_time_stamp, file_time_stamp, entity_status);
-			set_resource_ts(path, file_time_stamp);
+			save_resource(path, file_time_stamp);
 		}
 		else if(COMMAND_SAVE)
 		{
-			set_resource_ts(path, file_time_stamp);
+			save_resource(path, file_time_stamp);
 		}
 	}
 	else if(file_time_stamp < db_time_stamp)
@@ -597,19 +520,13 @@ void prepare_resource(char * path)
 		else if(COMMAND_PUSH)
 		{
 			push_resource(path, db_time_stamp, file_time_stamp, entity_status);
-			set_resource_ts(path, -1);
+			save_resource(path, -1);
 		}
 		else if(COMMAND_SAVE)
 		{
-			set_resource_ts(path, -1);
+			save_resource(path, -1);
 		}
 	}
-}
-
-int fs_entity_exists(const char *filename)
-{
-	struct stat buffer;
-	return (stat (filename, &buffer) == 0);
 }
 
 /*
