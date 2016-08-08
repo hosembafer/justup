@@ -214,7 +214,7 @@ int send_resource(TYPE_RESOURCE resource)
 		if(!FtpPut(resource.path, basename(path_tok), FTPLIB_IMAGE, ftp_conn))
 		{
 			printf("FTP unable to modify file in remote server\n");
-			if(!answer_yn("Shik this operation ?"))
+			if(!answer_yn("Skip this operation ?"))
 			{
 				exit(EXIT_FAILURE);
 			}
@@ -222,7 +222,7 @@ int send_resource(TYPE_RESOURCE resource)
 		if(!FtpChdir(profile_basedir, ftp_conn))
 		{
 			printf("FTP is unable to find base directory or unable to change directory in remote server\n");
-			if(!answer_yn("Shik this operation ?"))
+			if(!answer_yn("Skip this operation ?"))
 			{
 				exit(EXIT_FAILURE);
 			}
@@ -235,7 +235,7 @@ int send_resource(TYPE_RESOURCE resource)
 		if(!FtpChdir(profile_basedir, ftp_conn))
 		{
 			printf("FTP is unable to find base directory or unable to change directory in remote server\n");
-			if(!answer_yn("Shik this operation ?"))
+			if(!answer_yn("Skip this operation ?"))
 			{
 				exit(EXIT_FAILURE);
 			}
@@ -243,7 +243,7 @@ int send_resource(TYPE_RESOURCE resource)
 		if(!FtpDelete(path_tok, ftp_conn))
 		{
 			printf("FTP unable to delete a file <%s> in remote server\n", resource.path);
-			if(!answer_yn("Shik this operation ?"))
+			if(!answer_yn("Skip this operation ?"))
 			{
 				exit(EXIT_FAILURE);
 			}
