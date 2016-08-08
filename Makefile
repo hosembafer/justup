@@ -1,7 +1,7 @@
 INSTALL = /usr/bin/install -c
 
 CC = gcc 
-CPARAMS = -o
+CPARAMS = -g -o
 NAME = justup
 
 CFLAGS = `pkg-config --cflags --libs sqlite3` -lftp

@@ -59,7 +59,7 @@ static void list_db()
 	char *err_msg = 0;
 	char *sql = "SELECT * FROM test ORDER BY test_path DESC";
 	
-	rc = sqlite3_exec(db, sql, inih_callback, 0, &err_msg);
+	rc = sqlite3_exec(db, sql, list_db_callback, 0, &err_msg);
 	
 	if(rc != SQLITE_OK)
 	{
@@ -70,7 +70,7 @@ static void list_db()
 	}
 }
 
-int inih_callback(void *NotUsed, int argc, char **argv, char **azColName)
+int list_db_callback(void *NotUsed, int argc, char **argv, char **azColName)
 {
 	NotUsed = 0;
 	
