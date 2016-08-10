@@ -1,3 +1,5 @@
+int md5file(char *filename, char *md5hash);
+
 static int inih_handler(void* user, const char* section, const char* name, const char* value);
 
 typedef void (*list_dir_cb)(char * path);

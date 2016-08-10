@@ -19,12 +19,48 @@
 #include <fcntl.h>
 
 #include <fnmatch.h>
+#include <openssl/md5.h>
 
 #include <sqlite3.h>
 
 #include "vars.h"
 #include "helpers.c"
 #include "justup.h"
+
+int md5file(char *filename, char *md5hash)
+{
+	unsigned char c[MD5_DIGEST_LENGTH];
+	char temp_sybmols[3];
+	FILE *inFile = fopen(filename, "rb");
+	int i;
+	MD5_CTX mdContext;
+	int bytes;
+	unsigned char data[1024];
+	
+	if(inFile == NULL)
+	{
+		printf("%s can't be opened for calculate md5.\n", filename);
+		return 0;
+	}
+	
+	MD5_Init(&mdContext);
+	while((bytes = fread(data, 1, 1024, inFile)) != 0)
+	{
+		MD5_Update(&mdContext, data, bytes);
+	}
+	MD5_Final(c, &mdContext);
+	fclose(inFile);
+	
+	for(i = 0; i < MD5_DIGEST_LENGTH; i++)
+	{
+		sprintf(temp_sybmols, "%02x", c[i]);
+		
+		md5hash[i*2] = temp_sybmols[0];
+		md5hash[i*2+1] = temp_sybmols[1];
+	}
+	
+	return 0;
+}
 
 static int inih_handler(void* user, const char* section, const char* name, const char* value)
 {
@@ -675,6 +711,10 @@ int main(int argc, char **argv)
 		usage();
 	}
 	
+	/*char fileHash[32];
+	md5file("Makefile", fileHash);
+	
+	printf("MD5 TEST RESULT: %s\n", fileHash);*/
 	
 	deinit();
 	return EXIT_SUCCESS;
