@@ -4,7 +4,7 @@ CC = gcc
 CPARAMS = -g -o
 NAME = justup
 
-CFLAGS = `pkg-config --cflags --libs sqlite3` -lftp -lssl -lcrypto
+CFLAGS = `pkg-config --cflags --libs sqlite3` -lftp -lssl -lcrypto -lssh
 SOURCES = src/justup.c
 EXECUTABLE = $(NAME)
 

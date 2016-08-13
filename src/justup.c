@@ -3,7 +3,12 @@
 #include <string.h>
 #include <stdint.h>
 #include <errno.h>
+
 #include <ftplib.h>
+
+#define LIBSSH_STATIC 1
+#include <libssh/libssh.h>
+#include <libssh/sftp.h>
 
 #include "inih/ini.c"
 
@@ -39,7 +44,7 @@ int md5file(char *filename, char *md5hash)
 	
 	if(inFile == NULL)
 	{
-		printf("%s can't be opened for calculate md5.\n", filename);
+		memset(md5hash, 0, 32);
 		return 0;
 	}
 	
@@ -59,7 +64,7 @@ int md5file(char *filename, char *md5hash)
 		md5hash[i*2+1] = temp_sybmols[1];
 	}
 	
-	return 0;
+	return 1;
 }
 
 static int inih_handler(void* user, const char* section, const char* name, const char* value)
@@ -307,7 +312,7 @@ int is_resource_exists(char path[])
 	return 0;
 }
 
-int push_resource(char path[], int db_time_stamp, int file_time_stamp, char status[])
+int push_resource(char path[], char db_hash[], char file_hash[], char status[])
 {
 	if(!is_resource_exists(path))
 	{
@@ -315,8 +320,8 @@ int push_resource(char path[], int db_time_stamp, int file_time_stamp, char stat
 		resources = realloc(resources, sizeof(TYPE_RESOURCE) * resources_size);
 		
 		strcpy(resources[resources_size - 1].path, path);
-		resources[resources_size - 1].db_time_stamp = db_time_stamp;
-		resources[resources_size - 1].file_time_stamp = file_time_stamp;
+		strcpy(resources[resources_size - 1].db_hash, db_hash);
+		strcpy(resources[resources_size - 1].file_hash, file_hash);
 		strcpy(resources[resources_size - 1].status, status);
 		
 		return resources_size - 1;
@@ -330,54 +335,98 @@ void proceed()
 {
 	if(COMMAND_PUSH)
 	{
-		FtpInit();
-		if(!FtpConnect(profile_host, &ftp_conn) || !FtpLogin(profile_user, profile_pass, ftp_conn))
+		if(TRANSFER_PROTOCOL_FTP)
 		{
-			printf("FTP Client can't establishe connection or after connecting can't authorize FTP Server\n");
-			exit(EXIT_FAILURE);
+			FtpInit();
+			if(!FtpConnect(profile_host, &ftp_conn) || !FtpLogin(profile_user, profile_pass, ftp_conn))
+			{
+				printf("FTP Client can't establishe connection or after connecting can't authorize FTP Server\n");
+				exit(EXIT_FAILURE);
+			}
+			
+			FtpChdir(profile_basedir, ftp_conn);
 		}
-		
-		FtpChdir(profile_basedir, ftp_conn);
+		else if(TRANSFER_PROTOCOL_SFTP)
+		{
+			my_ssh_session = ssh_new();
+			ssh_options_set(my_ssh_session, SSH_OPTIONS_HOST, profile_host);
+			
+			ssh_connect(my_ssh_session);
+			ssh_userauth_password(my_ssh_session, profile_user, profile_pass);
+			
+			sftp_conn = sftp_new(my_ssh_session);
+			sftp_init(sftp_conn);
+		}
 	}
 	
 	int i;
 	for(i = 0; i < resources_size; i++)
 	{
+		char status_color[10] = {0};
+		if(resources[i].status[0] == 'M')
+		{
+			strcpy(status_color, ANSI_COLOR_CYAN);
+		}
+		else if(resources[i].status[0] == 'R')
+		{
+			strcpy(status_color, ANSI_COLOR_RED);
+		}
+		else if(resources[i].status[0] == 'A')
+		{
+			strcpy(status_color, ANSI_COLOR_GREEN);
+		}
+		
 		if(COMMAND_PUSH)
 		{
-			//printf("%s-%i-%i-%s\n", resources[i].path, resources[i].file_time_stamp, resources[i].db_time_stamp, resources[i].status);
-			if(send_resource(resources[i]))
+			//printf("%s-%s-%s-%s\n", resources[i].path, resources[i].file_hash, resources[i].db_hash, resources[i].status);
+			if(TRANSFER_PROTOCOL_FTP)
 			{
-				save_resource(resources[i].path, resources[i].file_time_stamp);
-				printf("%s|OK \t %s\n", resources[i].status, resources[i].path);
+				if(send_resource(resources[i]))
+				{
+					save_resource(resources[i].path, resources[i].file_hash);
+					printf("%s%s|OK \t %s\n", status_color, resources[i].status, resources[i].path);
+				}
+				else
+				{
+					printf("%s%s|FAILURE \t %s\n", status_color, resources[i].status, resources[i].path);
+					exit(EXIT_FAILURE);
+				}
 			}
-			else
+			else if(TRANSFER_PROTOCOL_SFTP)
 			{
-				printf("%s|FAILURE \t %s\n", resources[i].status, resources[i].path);
-				exit(EXIT_FAILURE);
+				
 			}
 		}
 		else if(COMMAND_SAVE)
 		{
-			save_resource(resources[i].path, resources[i].file_time_stamp);
-			printf("%s|SAVED \t %s\n", resources[i].status, resources[i].path);
+			save_resource(resources[i].path, resources[i].file_hash);
+			printf("%s%s|SAVED \t %s\n" ANSI_COLOR_RESET, status_color, resources[i].status, resources[i].path);
 		}
 		else if(COMMAND_STATUS)
 		{
-			printf("%s \t %s\n", resources[i].status, resources[i].path);
+			printf("%s%s \t %s\n" ANSI_COLOR_RESET, status_color, resources[i].status, resources[i].path);
 		}
 	}
 	
-	if(COMMAND_PUSH && ftp_conn)
+	if(COMMAND_PUSH)
 	{
-		FtpClose(ftp_conn);
+		if(TRANSFER_PROTOCOL_FTP && ftp_conn)
+		{
+			FtpClose(ftp_conn);
+		}
+		else if(TRANSFER_PROTOCOL_SFTP && sftp_conn)
+		{
+			ssh_disconnect(my_ssh_session);
+			sftp_free(sftp_conn);
+			ssh_free(my_ssh_session);
+		}
 	}
 }
 
-void save_resource(char *path, int time_stamp)
+void save_resource(char *path, char *hash)
 {
 	char *err_msg = 0;
-	if(time_stamp == -1)
+	if(!strlen(hash))
 	{
 		char *sqlDelete = "DELETE FROM test WHERE test_path=?";
 		
@@ -396,12 +445,13 @@ void save_resource(char *path, int time_stamp)
 		if(step == SQLITE_DONE)
 		{
 			// REMOVING
+			// printf("REMOVING\n");
 		}
 		
 		return;
 	}
 	
-	char *sqlInsert = "INSERT INTO test (test_timestamp, test_path) VALUES (?, ?)";
+	char *sqlInsert = "INSERT INTO test (test_hash, test_path) VALUES (?, ?)";
 	
 	rc = sqlite3_prepare_v2(db, sqlInsert, strlen(sqlInsert), &res, 0);
 	
@@ -413,7 +463,7 @@ void save_resource(char *path, int time_stamp)
 	
 	if(rc == SQLITE_OK)
 	{
-		sqlite3_bind_int(res, 1, time_stamp);
+		sqlite3_bind_text(res, 1, hash, strlen(hash), SQLITE_STATIC);
 		sqlite3_bind_text(res, 2, path, strlen(path), SQLITE_STATIC);
 	}
 	else
@@ -425,15 +475,16 @@ void save_resource(char *path, int time_stamp)
 	if(step == SQLITE_DONE)
 	{
 		// ADDING
+		// printf("ADDING\n");
 	}
 	else
 	{
-		char *sqlUpdate = "UPDATE test SET test_timestamp=? WHERE test_path=?";
+		char *sqlUpdate = "UPDATE test SET test_hash=? WHERE test_path=?";
 		rc = sqlite3_prepare_v2(db, sqlUpdate, strlen(sqlUpdate), &res, 0);
 		
 		if(rc == SQLITE_OK)
 		{
-			sqlite3_bind_int(res, 1, time_stamp);
+			sqlite3_bind_text(res, 1, hash, strlen(hash), SQLITE_STATIC);
 			sqlite3_bind_text(res, 2, path, strlen(path), SQLITE_STATIC);
 		}
 		else
@@ -445,15 +496,16 @@ void save_resource(char *path, int time_stamp)
 		if(step == SQLITE_DONE)
 		{
 			// UPDATING
+			// printf("UPDATING\n");
 		}
 	}
 	
 	sqlite3_finalize(res);
 }
 
-int get_resource_ts(char *path)
+int get_resource_hash(char *path, char *hash)
 {
-	int savedTimeStamp = -1;
+	char *savedHash;
 	char *err_msg = 0;
 	char *sql = "SELECT * FROM test WHERE test_path=?";
 	
@@ -471,7 +523,8 @@ int get_resource_ts(char *path)
 	int step = sqlite3_step(res);
 	if(step == SQLITE_ROW)
 	{
-		savedTimeStamp = sqlite3_column_int(res, 2);
+		savedHash = (char*)sqlite3_column_text(res, 2);
+		strcpy(hash, savedHash);
 	}
 	
 	sqlite3_finalize(res);
@@ -483,7 +536,7 @@ int get_resource_ts(char *path)
 		sqlite3_free(err_msg);
 	}
 	
-	return savedTimeStamp;
+	return 1;
 }
 
 void proceed_profile(char *new_profile)
@@ -524,32 +577,31 @@ void proceed_profile(char *new_profile)
  * our list_dir() or list_db() functions iterating/reading new resource.
  */
 void prepare_resource(char *path)
-{ 
-	int file_time_stamp = file_modify_date(path);
-	int db_time_stamp = get_resource_ts(path);
-	
+{
+	char file_hash[33] = {0};
+	char db_hash[33] = {0};
 	char entity_status[2];
 	
-	// printf("%s-%i-%i\n", path, file_time_stamp, db_time_stamp);
-	if(file_time_stamp == -1 || db_time_stamp == -1)
+	md5file(path, file_hash);
+	get_resource_hash(path, db_hash);
+	
+	//printf("%s-%s-%s\n", file_hash, db_hash, path);
+	if(!strlen(file_hash))
 	{
-		if(file_time_stamp > db_time_stamp)
-		{
-			strcpy(entity_status, "A");
-		}
-		else
-		{
-			strcpy(entity_status, "R");
-		}
+		strcpy(entity_status, "R");
 	}
-	else
+	else if(!strlen(db_hash))
+	{
+		strcpy(entity_status, "A");
+	}
+	else if(strcmp(file_hash, db_hash))
 	{
 		strcpy(entity_status, "M");
 	}
 	
-	if(file_time_stamp != db_time_stamp)
+	if(strcmp(file_hash, db_hash))
 	{
-		push_resource(path, db_time_stamp, file_time_stamp, entity_status);
+		push_resource(path, db_hash, file_hash, entity_status);
 	}
 }
 
@@ -576,8 +628,6 @@ void init(int argc, char **argv)
 	}
 	
 	int profile_csize = fsize(".justup/profile.current");
-	/*profile = (char *)malloc(sizeof(char) * profile_csize);
-	memset(profile, 0, profile_csize);*/
 	
 	int ipfp = open(".justup/profile.current", O_RDONLY, 0777);
 	read(ipfp, profile, profile_csize);
@@ -608,7 +658,7 @@ void init(int argc, char **argv)
 	}
 	
 	char *err_msg = 0;
-	char *sql = "CREATE TABLE test(test_id INTEGER PRIMARY KEY, test_path TEXT UNIQUE, test_timestamp INT);";
+	char *sql = "CREATE TABLE test(test_id INTEGER PRIMARY KEY, test_path TEXT UNIQUE, test_hash TEXT);";
 	sqlite3_exec(db, sql, 0, 0, &err_msg);
 	
 	
@@ -634,7 +684,10 @@ void init(int argc, char **argv)
 		int ai = 2;
 		for(; ai < argc; ai++)
 		{
-			if(fs_entity_exists(argv[ai]) || get_resource_ts(argv[ai]) != -1)
+			char resource_hash[32] = {0};
+			get_resource_hash(argv[ai], resource_hash);
+			
+			if(fs_entity_exists(argv[ai]) || strlen(resource_hash) > 0)
 			{
 				ONLY_COMMAND = 0;
 			}
@@ -646,7 +699,14 @@ void init(int argc, char **argv)
 		}
 	}
 	
-	
+	if(!strcmp(profile_protocol, "ftp"))
+	{
+		TRANSFER_PROTOCOL_FTP = 1;
+	}
+	else if(!strcmp(profile_protocol, "sftp"))
+	{
+		TRANSFER_PROTOCOL_SFTP = 1;
+	}
 	
 	fp_cvsignore_size = fsize(fp_cvsignore);
 	
@@ -666,6 +726,8 @@ void init(int argc, char **argv)
 	memset(resources, 0, resources_size);
 	
 	printf("Current profile: %s\n", profile);
+	printf("Transfer protocol: %s\n", profile_protocol);
+	printf("---------------------------\n");
 }
 
 void deinit()
@@ -694,12 +756,15 @@ int main(int argc, char **argv)
 		}
 		else
 		{
+			char resource_hash[32] = {0};
 			int ai;
 			for(ai = 2; ai < argc; ai++)
 			{
-				if(fs_entity_exists(argv[ai]) || get_resource_ts(argv[ai]) != -1)
+				get_resource_hash(argv[ai], resource_hash);
+				if(fs_entity_exists(argv[ai]) || strlen(resource_hash) > 0)
 				{
 					prepare_resource(argv[ai]);
+					memset(resource_hash, 0, strlen(resource_hash));
 				}
 			}
 		}
@@ -710,11 +775,6 @@ int main(int argc, char **argv)
 	{
 		usage();
 	}
-	
-	/*char fileHash[32];
-	md5file("Makefile", fileHash);
-	
-	printf("MD5 TEST RESULT: %s\n", fileHash);*/
 	
 	deinit();
 	return EXIT_SUCCESS;

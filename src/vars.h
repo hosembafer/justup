@@ -6,9 +6,23 @@ int COMMAND_PROFILE = 0;
 int COMMAND_SAVE = 0;
 int ONLY_COMMAND = 1;
 
+int TRANSFER_PROTOCOL_FTP = 0;
+int TRANSFER_PROTOCOL_SFTP = 0;
 
-// FTP
+
+// Colors for terminal
+#define ANSI_COLOR_RED     "\x1b[31m"
+#define ANSI_COLOR_GREEN   "\x1b[32m"
+#define ANSI_COLOR_YELLOW  "\x1b[33m"
+#define ANSI_COLOR_BLUE    "\x1b[34m"
+#define ANSI_COLOR_MAGENTA "\x1b[35m"
+#define ANSI_COLOR_CYAN    "\x1b[36m"
+#define ANSI_COLOR_RESET   "\x1b[0m"
+
+// FTP & SFTP
 netbuf *ftp_conn = NULL;
+sftp_session sftp_conn = NULL;
+ssh_session my_ssh_session = NULL;
 
 
 // SQLite special variables
@@ -39,9 +53,9 @@ char profile_basedir[80];
 // Variables for resources
 typedef struct TYPE_RESOURCE {
 	char path[PATH_MAX];
-	int file_time_stamp;
-	int db_time_stamp;
-	char status[1];
+	char file_hash[33];
+	char db_hash[33];
+	char status[2];
 } TYPE_RESOURCE;
 
 struct TYPE_RESOURCE *resources;

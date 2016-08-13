@@ -16,13 +16,11 @@ int send_resource(TYPE_RESOURCE resource);
 
 int is_resource_exists(char path[]);
 
-int push_resource(char path[], int db_time_stamp, int file_time_stamp, char status[]);
+int push_resource(char path[], char db_hash[], char file_hash[], char status[]);
 
 void proceed();
 
-void save_resource(char *path, int time_stamp);
-
-int get_resource_ts(char *path);
+void save_resource(char *path, char *hash);
 
 int lock(int act);
 
