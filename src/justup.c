@@ -93,8 +93,6 @@ static int inih_handler(void* user, const char* section, const char* name, const
 			char lastSlash[] = {"/"};
 			strcat(profile_basedir, lastSlash);
 		}
-		
-		printf("BASEDIR: %s\n", profile_basedir);
 	}
 	
 	return 1;
