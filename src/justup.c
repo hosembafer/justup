@@ -88,6 +88,13 @@ static int inih_handler(void* user, const char* section, const char* name, const
 	else if(!strcmp(name, "basedir"))
 	{
 		strcpy(profile_basedir, value);
+		if(profile_basedir[strlen(profile_basedir) - 1] != '/')
+		{
+			char lastSlash[] = {"/"};
+			strcat(profile_basedir, lastSlash);
+		}
+		
+		printf("BASEDIR: %s\n", profile_basedir);
 	}
 	
 	return 1;
