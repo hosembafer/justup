@@ -10,9 +10,11 @@ int list_db_callback(void *NotUsed, int argc, char **argv, char **azColName);
 
 static void list_dir(const char * dir_name, int allow_type, list_dir_cb list_dir_callback);
 
-int path_to_commands(char path[]);
+int path_to_commands_ftp(char path[]);
+int path_to_commands_sftp(char path[]);
 
-int send_resource(TYPE_RESOURCE resource);
+int send_resource_ftp(TYPE_RESOURCE resource);
+int send_resource_sftp(TYPE_RESOURCE resource);
 
 int is_resource_exists(char path[]);
 

@@ -1,3 +1,41 @@
+char *strrev(char *str)
+{
+	int i = strlen(str) - 1, j = 0;
+	
+	char ch;
+	while(i > j)
+	{
+		ch = str[i];
+		str[i] = str[j];
+		str[j] = ch;
+		
+		i--;
+		j++;
+	}
+	
+	return str;
+}
+
+int chrpos(const char *haystack, char needle)
+{
+	char *p = strchr(haystack, needle);
+	if(p)
+	{
+		return p - haystack;
+	}
+	return -1;
+}
+
+int strpos(const char *haystack, char *needle)
+{
+	char *p = strstr(haystack, needle);
+	if(p)
+	{
+		return p - haystack;
+	}
+	return -1;
+}
+
 int file_modify_date(char *path)
 {
 	struct stat attr;
@@ -35,6 +73,16 @@ off_t fsize(const char *filename)
 		return st.st_size;
 	
 	return -1; 
+}
+
+mode_t fmode(const char *filename)
+{
+	struct stat st;
+	
+	if(stat(filename, &st) == 0)
+		return st.st_mode;
+	
+	return 0; 
 }
 
 int fnmatch_multi(char *patterns /* Separated by new lines(\n) */, const char *string, int flags)

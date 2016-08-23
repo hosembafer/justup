@@ -213,7 +213,7 @@ static void list_dir(const char * dir_name, int allow_type, list_dir_cb list_dir
 	}
 }
 
-int path_to_commands(char path[])
+int path_to_commands_ftp(char path[])
 {
 	int total_size = 0;
 	char *s = strdup(path), *p;
@@ -241,14 +241,119 @@ int path_to_commands(char path[])
 	return 1;
 }
 
-int send_resource(TYPE_RESOURCE resource)
+int path_to_commands_sftp(char *path)
+{
+	int i, j, x;
+	
+	int tokenCount = 1;
+	char *pch = strchr(path, '/');
+	while(pch != NULL)
+	{
+		tokenCount++;
+		pch = strchr(pch + 1, '/');
+	}
+	
+	char tokens[tokenCount][PATH_MAX];
+	
+	/* SPLIT - start */
+	int tokenPos = -1;
+	char lastPath[PATH_MAX] = {0};
+	i = 0;
+	while(path[i] != '\0')
+	{
+		if(path[i] == '/')
+		{
+			tokenPos++;
+			strcpy(tokens[tokenPos], lastPath);
+			memset(lastPath, 0, strlen(lastPath));
+		}
+		
+		if(path[i] != '/')
+		{
+			lastPath[strlen(lastPath)] = path[i];
+			lastPath[strlen(lastPath) + 1] = '\0';
+		}
+		
+		i++;
+	}
+	if(strlen(lastPath) > 0)
+	{
+		tokenPos++;
+		strcpy(tokens[tokenPos], lastPath);
+		memset(lastPath, 0, strlen(lastPath));
+	}
+	/* SPLIT - end */
+	
+	char finalPath[PATH_MAX];
+	char finalLocalPath[PATH_MAX];
+	
+	memset(finalPath, 0, strlen(finalPath));
+	memset(finalLocalPath, 0, strlen(finalLocalPath));
+	
+	for(i = 0; i < tokenCount; i++)
+	{
+		sprintf(finalPath, "%s%s", profile_basedir, tokens[0]);
+		sprintf(finalLocalPath, "%s", tokens[0]);
+		
+		for(j = 1; j <= i; j++)
+		{
+			strcat(finalPath, "/");
+			strcat(finalLocalPath, "/");
+			
+			strcat(finalPath, tokens[j]);
+			strcat(finalLocalPath, tokens[j]);
+		}
+		
+		if(i != tokenCount - 1)
+		{
+			sftp_mkdir(sftp_conn, finalPath, fmode(finalLocalPath));
+			
+			return 1;
+		}
+		else
+		{
+			sftp_file remoteFile = sftp_open(sftp_conn, finalPath, O_CREAT | O_RDWR | O_TRUNC, fmode(finalLocalPath));
+			if(remoteFile != NULL)
+			{
+				FILE *localFile = fopen(finalLocalPath, "rb");
+				int fileLength;
+				fileLength = fsize(finalLocalPath);
+				
+				if(localFile != NULL)
+				{
+					int bytes;
+					char fileBuffer[fsize(finalLocalPath) + 1];
+					memset(fileBuffer, 0, strlen(fileBuffer));
+					
+					fread(fileBuffer, fileLength, 1, localFile);
+					
+					sftp_write(remoteFile, fileBuffer, fileLength);
+					
+					/*fprintf(stderr, "Error writing %d bytes: %s\n",
+							filelen, ssh_get_error(my_ssh_session));*/
+					
+					fclose(localFile);
+				}
+			}
+			
+			return 1;
+		}
+		
+		memset(finalPath, 0, strlen(finalPath));
+		memset(finalLocalPath, 0, strlen(finalLocalPath));
+	}
+	
+	return 0;
+}
+
+int send_resource_ftp(TYPE_RESOURCE resource)
 {
 	char path_tok[strlen(resource.path)];
 	strcpy(path_tok, resource.path);
 	
 	if(!strcmp(resource.status, "A") || !strcmp(resource.status, "M"))
 	{
-		if(!path_to_commands(resource.path))
+		if(!path_to_commands_ftp(resource.path))
 		{
 			printf("FTP unable to create a folder in remote server\n");
 		}
@@ -289,6 +394,36 @@ int send_resource(TYPE_RESOURCE resource)
 				exit(EXIT_FAILURE);
 			}
 		}
+		
+		return 1;
+	}
+	
+	return 0;
+}
+
+int send_resource_sftp(TYPE_RESOURCE resource)
+{
+	char path_tok[strlen(resource.path)];
+	strcpy(path_tok, resource.path);
+	
+	/*printf("%i\n", S_IRUSR);
+	printf("%i\n", S_IRWXG);
+	printf("%i\n", S_IRGRP);
+	printf("%i\n", S_IWGRP);
+	printf("%i\n", S_IXGRP);
+	printf("MODE: %i\n", fmode("eee"));*/
+	
+	if(!strcmp(resource.status, "A") || !strcmp(resource.status, "M"))
+	{
+		path_to_commands_sftp(resource.path);
+		
+		return 1;
+	}
+	else if(!strcmp(resource.status, "R"))
+	{
+		char fullPath[PATH_MAX] = {0};
+		sprintf(fullPath, "%s%s", profile_basedir, resource.path);
+		sftp_unlink(sftp_conn, fullPath);
 		
 		return 1;
 	}
@@ -381,20 +516,29 @@ void proceed()
 			//printf("%s-%s-%s-%s\n", resources[i].path, resources[i].file_hash, resources[i].db_hash, resources[i].status);
 			if(TRANSFER_PROTOCOL_FTP)
 			{
-				if(send_resource(resources[i]))
+				if(send_resource_ftp(resources[i]))
 				{
 					save_resource(resources[i].path, resources[i].file_hash);
-					printf("%s%s|OK \t %s\n", status_color, resources[i].status, resources[i].path);
+					printf("%s%s|OK \t %s\n" ANSI_COLOR_RESET, status_color, resources[i].status, resources[i].path);
 				}
 				else
 				{
-					printf("%s%s|FAILURE \t %s\n", status_color, resources[i].status, resources[i].path);
+					printf("%s%s|FAILURE \t %s\n" ANSI_COLOR_RESET, status_color, resources[i].status, resources[i].path);
 					exit(EXIT_FAILURE);
 				}
 			}
 			else if(TRANSFER_PROTOCOL_SFTP)
 			{
-				
+				if(send_resource_sftp(resources[i]))
+				{
+					save_resource(resources[i].path, resources[i].file_hash);
+					printf("%s%s|OK \t %s\n" ANSI_COLOR_RESET, status_color, resources[i].status, resources[i].path);
+				}
+				else
+				{
+					printf("%s%s|FAILURE \t %s\n" ANSI_COLOR_RESET, status_color, resources[i].status, resources[i].path);
+					exit(EXIT_FAILURE);
+				}
 			}
 		}
 		else if(COMMAND_SAVE)
@@ -416,7 +560,7 @@ void proceed()
 		}
 		else if(TRANSFER_PROTOCOL_SFTP && sftp_conn)
 		{
-			ssh_disconnect(my_ssh_session);
+			//ssh_disconnect(my_ssh_session);
 			sftp_free(sftp_conn);
 			ssh_free(my_ssh_session);
 		}
