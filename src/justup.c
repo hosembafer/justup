@@ -321,22 +321,23 @@ int path_to_commands_sftp(char *path)
 				
 				if(localFile != NULL)
 				{
-					int bytes;
-					char fileBuffer[fsize(finalLocalPath) + 1];
-					memset(fileBuffer, 0, strlen(fileBuffer));
+					int bytes = 0;
+					int bytesRead = 0;
+					char chunk[CHUNK_SIZE] = {0};
 					
-					fread(fileBuffer, fileLength, 1, localFile);
-					
-					sftp_write(remoteFile, fileBuffer, fileLength);
-					
-					/*fprintf(stderr, "Error writing %d bytes: %s\n",
-							filelen, ssh_get_error(my_ssh_session));*/
+					while((bytes = fread(chunk, 1, CHUNK_SIZE, localFile)) > 0)
+					{
+						fseek(localFile, bytes + bytesRead, SEEK_SET);
+						bytesRead += bytes;
+						
+						sftp_write(remoteFile, chunk, bytes);
+					}
 					
 					fclose(localFile);
 				}
 			}
 			
-			return 1;
+			return 0;
 		}
 		
 		memset(finalPath, 0, strlen(finalPath));

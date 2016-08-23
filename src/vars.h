@@ -1,4 +1,5 @@
-#define PATH_MAX 4096
+#define PATH_MAX 4096 // 4k
+#define CHUNK_SIZE 16384 // 16k
 
 int COMMAND_STATUS = 0;
 int COMMAND_PUSH = 0;
