@@ -328,14 +328,15 @@ int path_to_commands_sftp(char *path)
 				{
 					int bytes = 0;
 					int bytesRead = 0;
-					char chunk[CHUNK_SIZE] = {0};
+					int bytesWritten = 0;
+					char chunk[CHUNK_SIZE] = {0}; // 4kb
 					
-					while((bytes = fread(chunk, 1, CHUNK_SIZE, localFile)) > 0)
+					while((bytesRead = fread(chunk, 1, CHUNK_SIZE, localFile)) > 0)
 					{
-						fseek(localFile, bytes + bytesRead, SEEK_SET);
-						bytesRead += bytes;
+						bytesWritten = sftp_write(remoteFile, chunk, bytesRead);
 						
-						sftp_write(remoteFile, chunk, bytes);
+						bytes += bytesWritten;
+						fseek(localFile, bytes, SEEK_SET);
 					}
 					
 					fclose(localFile);
