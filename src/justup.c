@@ -321,23 +321,10 @@ int path_to_commands_sftp(char *path)
 			if(remoteFile != NULL)
 			{
 				FILE *localFile = fopen(finalLocalPath, "rb");
-				int fileLength;
-				fileLength = fsize(finalLocalPath);
-				
 				if(localFile != NULL)
 				{
-					int bytes = 0;
-					int bytesRead = 0;
-					int bytesWritten = 0;
-					char chunk[CHUNK_SIZE] = {0}; // 4kb
-					
-					while((bytesRead = fread(chunk, 1, CHUNK_SIZE, localFile)) > 0)
-					{
-						bytesWritten = sftp_write(remoteFile, chunk, bytesRead);
-						
-						bytes += bytesWritten;
-						fseek(localFile, bytes, SEEK_SET);
-					}
+					char chunk[CHUNK_SIZE] = {0}; // 4096 (4kb)
+					while(sftp_write(remoteFile, chunk, fread(chunk, 1, CHUNK_SIZE, localFile)) > 0); // Bad manners in C
 					
 					fclose(localFile);
 				}
