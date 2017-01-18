@@ -46,6 +46,7 @@ int fp_cvsignore_size;
 char profile[20];
 char profile_protocol[7];
 char profile_host[80];
+unsigned int profile_port = 0;
 char profile_user[40];
 char profile_pass[80];
 char profile_basedir[80];

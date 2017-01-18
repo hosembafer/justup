@@ -1,10 +1,10 @@
 INSTALL = /usr/bin/install -c
 
 CC = gcc 
-CPARAMS = -g -o
+CPARAMS = -o
 NAME = justup
 
-CFLAGS = `pkg-config --cflags --libs sqlite3` -lftp -lssl -lcrypto -lssh
+CFLAGS = `pkg-config --cflags --libs sqlite3` -lftp -lssl -lcrypto -lssh -lm
 SOURCES = src/justup.c
 EXECUTABLE = $(NAME)
 

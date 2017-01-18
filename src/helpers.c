@@ -153,3 +153,38 @@ int answer_yn(char *question)
 		return 1;
 	}
 }
+
+int md5file(char *filename, char *md5hash)
+{
+	unsigned char c[MD5_DIGEST_LENGTH];
+	char temp_sybmols[3];
+	FILE *inFile = fopen(filename, "rb");
+	int i;
+	MD5_CTX mdContext;
+	int bytes;
+	unsigned char data[1024];
+	
+	if(inFile == NULL)
+	{
+		memset(md5hash, 0, 32);
+		return 0;
+	}
+	
+	MD5_Init(&mdContext);
+	while((bytes = fread(data, 1, 1024, inFile)) != 0)
+	{
+		MD5_Update(&mdContext, data, bytes);
+	}
+	MD5_Final(c, &mdContext);
+	fclose(inFile);
+	
+	for(i = 0; i < MD5_DIGEST_LENGTH; i++)
+	{
+		sprintf(temp_sybmols, "%02x", c[i]);
+		
+		md5hash[i*2] = temp_sybmols[0];
+		md5hash[i*2+1] = temp_sybmols[1];
+	}
+	
+	return 1;
+}

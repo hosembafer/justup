@@ -17,6 +17,7 @@
 #include <dirent.h>
 #include <libgen.h>
 
+#include <math.h>
 #include <time.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -32,41 +33,6 @@
 #include "helpers.c"
 #include "justup.h"
 
-int md5file(char *filename, char *md5hash)
-{
-	unsigned char c[MD5_DIGEST_LENGTH];
-	char temp_sybmols[3];
-	FILE *inFile = fopen(filename, "rb");
-	int i;
-	MD5_CTX mdContext;
-	int bytes;
-	unsigned char data[1024];
-	
-	if(inFile == NULL)
-	{
-		memset(md5hash, 0, 32);
-		return 0;
-	}
-	
-	MD5_Init(&mdContext);
-	while((bytes = fread(data, 1, 1024, inFile)) != 0)
-	{
-		MD5_Update(&mdContext, data, bytes);
-	}
-	MD5_Final(c, &mdContext);
-	fclose(inFile);
-	
-	for(i = 0; i < MD5_DIGEST_LENGTH; i++)
-	{
-		sprintf(temp_sybmols, "%02x", c[i]);
-		
-		md5hash[i*2] = temp_sybmols[0];
-		md5hash[i*2+1] = temp_sybmols[1];
-	}
-	
-	return 1;
-}
-
 static int inih_handler(void* user, const char* section, const char* name, const char* value)
 {
 	if(!strcmp(name, "protocol"))
@@ -76,6 +42,10 @@ static int inih_handler(void* user, const char* section, const char* name, const
 	else if(!strcmp(name, "host"))
 	{
 		strcpy(profile_host, value);
+	}
+	else if(!strcmp(name, "port"))
+	{
+		profile_port = atoi(value);
 	}
 	else if(!strcmp(name, "user"))
 	{
@@ -466,11 +436,29 @@ void proceed()
 	{
 		if(TRANSFER_PROTOCOL_FTP)
 		{
-			FtpInit();
-			if(!FtpConnect(profile_host, &ftp_conn) || !FtpLogin(profile_user, profile_pass, ftp_conn))
+			char *profile_host_and_port;
+			profile_host_and_port = (char *) malloc(sizeof(char) * strlen(profile_host));
+			strcpy(profile_host_and_port, profile_host);
+			
+			if(profile_port)
 			{
+				profile_host_and_port = (char *) realloc(profile_host_and_port, sizeof(char) * (strlen(profile_host) + 1 + floor(log10(abs(profile_port))) + 1));
+				sprintf(profile_host_and_port, "%s:%i", profile_host_and_port, profile_port);
+			}
+			
+			FtpInit();
+			if(!FtpConnect(profile_host_and_port, &ftp_conn) || !FtpLogin(profile_user, profile_pass, ftp_conn))
+			{
+				free(profile_host_and_port);
+				
 				printf("FTP Client can't establishe connection or after connecting can't authorize FTP Server\n");
 				exit(EXIT_FAILURE);
+			}
+			free(profile_host_and_port);
+			
+			if(profile_port)
+			{
+				FtpOptions(FTPLIB_PORT, profile_port, ftp_conn);
 			}
 			
 			FtpChdir(profile_basedir, ftp_conn);
@@ -480,7 +468,16 @@ void proceed()
 			my_ssh_session = ssh_new();
 			ssh_options_set(my_ssh_session, SSH_OPTIONS_HOST, profile_host);
 			
-			ssh_connect(my_ssh_session);
+			if(profile_port)
+			{
+				ssh_options_set(my_ssh_session, SSH_OPTIONS_PORT, &profile_port);
+			}
+			
+			if(ssh_connect(my_ssh_session) == SSH_ERROR)
+			{
+				printf("SFTP Client can't establishe connection or after connecting can't authorize SFTP Server\n");
+				exit(EXIT_FAILURE);
+			}
 			ssh_userauth_password(my_ssh_session, profile_user, profile_pass);
 			
 			sftp_conn = sftp_new(my_ssh_session);
@@ -698,6 +695,7 @@ void proceed_profile(char *new_profile)
 		
 		const char *profileExample = "protocol = ftp\n"
 		"host = localhost\n"
+		"#port = 21\n"
 		"user = user\n"
 		"pass = root123\n"
 		"basedir = /var/www/site/";

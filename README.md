@@ -1,8 +1,6 @@
 # justup
 Justup is a deployment tool written in C.
 
-Current status: **TESTING**
-
 Transfer protocols: **FTP**, **SFTP**
 
 The project is created for simple sites, that usually don't use servers with SFTP, WebDAV or something like that, when there isn't any other way except use FTP.
@@ -32,6 +30,7 @@ $ justup profile `master/dev/something_else`
 ```ini
 protocol = ftp              # ftp/sftp
 host = localhost            # host/domain/ip of server
+port = 21                   # optional, if not set, so port choose automatically
 user = user                 # user
 pass = root123              # password
 basedir = /var/www/site/    # path to project root hosted on remote server
